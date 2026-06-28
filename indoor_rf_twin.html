@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Indoor RF + Crowd Digital Twin</title>
+<style>
+:root {
+  --bg:#0b0d10;--s0:#0f1216;--s1:#13171c;--s2:#1a1f26;
+  --bd:#23282f;--bd2:#323942;
+  --tx:#e8eaed;--tx2:#aab1bc;--txm:#6b7280;
+  --ac:#3ddc97;--acd:#1d6b4d;--acb:rgba(61,220,151,.10);--acbr:rgba(61,220,151,.35);
+  --mg:#ff5fd1;--cy:#3dd6ff;
+  --r:8px;
+  --mono:"JetBrains Mono","SF Mono",ui-monospace,Consolas,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--tx);font-family:var(--sans);min-height:100vh}
+#root{max-width:1180px;margin:0 auto;padding:28px 16px 40px;display:flex;flex-direction:column;gap:14px}
+.topbar{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.topbar h2{font-size:17px;font-weight:600;letter-spacing:-.01em}
+.topbar .sub{font-size:12px;color:var(--txm);margin-top:2px;font-family:var(--mono)}
+.badge{font-size:11px;font-family:var(--mono);padding:4px 10px;border-radius:5px;
+  border:1px solid var(--acbr);color:var(--ac);background:var(--acb);white-space:nowrap}
+.panels{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:760px){.panels{grid-template-columns:1fr}}
+.panel{background:var(--s1);border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+.panel-title{font-size:11px;font-weight:600;color:var(--txm);text-transform:uppercase;
+  letter-spacing:.06em;padding:9px 12px 7px;border-bottom:1px solid var(--bd);
+  display:flex;align-items:center;justify-content:space-between}
+.panel-title .leg{font-size:10px;text-transform:none;letter-spacing:0;color:var(--txm);
+  font-family:var(--mono);font-weight:400}
+canvas{display:block;width:100%;cursor:crosshair;background:var(--s0)}
+.controls{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:14px;
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+@media(max-width:760px){.controls{grid-template-columns:1fr}}
+.cg{display:flex;flex-direction:column;gap:7px}
+.cl{font-size:11px;color:var(--txm);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.radio-group{display:flex;flex-direction:column;gap:3px}
+.rb{font-size:12.5px;color:var(--tx2);cursor:pointer;padding:5px 9px;border-radius:var(--r);
+  border:1px solid transparent;transition:background .12s,color .12s;font-family:var(--mono)}
+.rb:hover{background:var(--s2)}
+.rb.active{color:var(--ac);background:var(--acb);border-color:var(--acbr)}
+.sr{display:flex;align-items:center;gap:8px}
+.sr label{font-size:12px;color:var(--tx2);min-width:62px}
+.sr span{font-size:12px;font-weight:600;color:var(--ac);min-width:38px;text-align:right;font-family:var(--mono)}
+input[type=range]{flex:1;height:4px;-webkit-appearance:none;appearance:none;
+  background:var(--bd2);border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+  border-radius:50%;background:var(--ac);cursor:pointer;border:2px solid var(--s1)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+  background:var(--ac);cursor:pointer;border:2px solid var(--s1)}
+.btn-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+button{font-size:12px;font-family:var(--sans);padding:7px 12px;border-radius:var(--r);
+  border:1px solid var(--bd2);background:transparent;color:var(--tx);cursor:pointer;
+  transition:background .12s,border-color .12s}
+button:hover{background:var(--s2);border-color:var(--txm)}
+button.primary{background:var(--acb);color:var(--ac);border-color:var(--acbr)}
+button.primary:hover{background:rgba(61,220,151,.18)}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.sc{background:var(--s0);border:1px solid var(--bd);border-radius:8px;padding:9px 11px}
+.sc .val{font-size:21px;font-weight:600;font-family:var(--mono)}
+.sc .lbl{font-size:10.5px;color:var(--txm);margin-top:2px;text-transform:uppercase;letter-spacing:.04em}
+.hint{font-size:11px;color:var(--txm);line-height:1.5}
+.hint b{color:var(--tx2)}
+footer{font-size:11px;color:var(--txm);text-align:center;font-family:var(--mono)}
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="topbar">
+    <div>
+      <h2>Indoor RF + crowd digital twin</h2>
+      <div class="sub">log-distance path loss · multi-wall attenuation · A* agents · RTI crowd sensing (Wilson &amp; Patwari) · edge-aware placement</div>
+    </div>
+    <span class="badge" id="badge">Initializing…</span>
+  </div>
+
+  <div class="panels">
+    <div class="panel">
+      <div class="panel-title">
+        <span>Floorplan + agents</span>
+        <span class="leg">click = add router · right-click = remove</span>
+      </div>
+      <canvas id="c-floor"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">
+        <span>RF coverage heatmap</span>
+        <span class="leg">RSSI (dBm) — empty room baseline</span>
+      </div>
+      <canvas id="c-rf"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-title">
+        <span>RTI crowd density</span>
+        <span class="leg">inferred from router-link attenuation only</span>
+      </div>
+      <canvas id="c-rti"></canvas>
+    </div>
+    <div class="panel" style="padding:14px">
+      <div class="panel-title" style="margin:-14px -14px 12px;padding:9px 12px 7px">Live statistics</div>
+      <div class="stats-grid">
+        <div class="sc"><div class="val" id="s-cov">—</div><div class="lbl">Coverage</div></div>
+        <div class="sc"><div class="val" id="s-dead">—</div><div class="lbl">Dead zones</div></div>
+        <div class="sc"><div class="val" id="s-rssi">—</div><div class="lbl">Avg RSSI</div></div>
+        <div class="sc"><div class="val" id="s-ppl">—</div><div class="lbl">Active agents</div></div>
+      </div>
+
+      <!-- Placement rationale -->
+      <div style="margin-top:10px;background:var(--s0);border:1px solid var(--bd);border-radius:8px;padding:10px 12px">
+        <div style="font-size:10px;font-weight:600;color:var(--txm);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Placement rationale</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:9px">
+          <div class="sc" style="padding:7px 9px">
+            <div class="val" style="font-size:16px" id="r-cov">—</div>
+            <div class="lbl">Coverage <span style="color:var(--txm);font-size:9px">60%</span></div>
+          </div>
+          <div class="sc" style="padding:7px 9px">
+            <div class="val" style="font-size:16px" id="r-len">—</div>
+            <div class="lbl">Avg link len <span style="color:var(--txm);font-size:9px">20%</span></div>
+          </div>
+          <div class="sc" style="padding:7px 9px">
+            <div class="val" style="font-size:16px" id="r-ang">—</div>
+            <div class="lbl">Angular div <span style="color:var(--txm);font-size:9px">20%</span></div>
+          </div>
+          <div class="sc" style="padding:7px 9px">
+            <div class="val" style="font-size:16px" id="r-lnk">—</div>
+            <div class="lbl">RTI links</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-size:10px;color:var(--txm);white-space:nowrap;font-family:var(--mono)">Score</div>
+          <div style="flex:1;height:6px;background:var(--bd2);border-radius:3px;overflow:hidden">
+            <div id="score-bar" style="height:100%;width:0%;background:var(--ac);border-radius:3px;transition:width .4s ease"></div>
+          </div>
+          <div id="score-val" style="font-size:12px;font-weight:600;color:var(--ac);font-family:var(--mono);min-width:36px;text-align:right">—</div>
+        </div>
+        <div style="display:flex;height:3px;border-radius:2px;overflow:hidden;margin-top:4px;gap:1px">
+          <div id="bar-cov" style="background:#3ddc97;transition:flex .4s ease"></div>
+          <div id="bar-len" style="background:#3dd6ff;transition:flex .4s ease"></div>
+          <div id="bar-ang" style="background:#ff5fd1;transition:flex .4s ease"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:3px">
+          <span style="font-size:9px;color:#3ddc97;font-family:var(--mono)">coverage</span>
+          <span style="font-size:9px;color:#3dd6ff;font-family:var(--mono)">link len</span>
+          <span style="font-size:9px;color:#ff5fd1;font-family:var(--mono)">angular</span>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:10px">
+        <b>RF heatmap:</b> FSPL = 32.44 + 20·log₁₀(d_km) + 20·log₁₀(f_MHz) minus wall losses.
+        Recomputed only when routers or network change.
+        <br><br>
+        <b>RTI (Wilson &amp; Patwari 2010):</b> Agent positions synthesise simulated link RSSI
+        readings — what real hardware would measure. The reconstruction algorithm itself never
+        reads agent coordinates; it only sees numeric signal drops per link and back-projects via
+        w = exp(−(d<sub>A</sub>+d<sub>B</sub>−|AB|)/λ), normalised by link density.
+        Red dashes on RTI panel = WiFi mesh links below −85 dBm.
+        <br><br>
+        <b>Placement score:</b> 60 % coverage + 20 % avg link length + 20 % angular
+        diversity. Angular diversity is the circular std-dev of link bearings — penalises
+        all-routers-on-one-wall layouts that produce parallel (correlated) links.
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="cg">
+      <div class="cl">Network</div>
+      <div class="radio-group" id="net-radio"></div>
+      <div style="margin-top:8px" class="cl">Coverage threshold</div>
+      <div class="sr">
+        <label>dBm</label>
+        <input type="range" id="sl-thr" min="-120" max="-60" value="-90" step="1">
+        <span id="v-thr">-90</span>
+      </div>
+    </div>
+    <div class="cg">
+      <div class="cl">Population</div>
+      <div class="sr">
+        <label>Agents</label>
+        <input type="range" id="sl-ppl" min="0" max="40" value="12" step="1">
+        <span id="v-ppl">12</span>
+      </div>
+      <div class="cl" style="margin-top:8px">Routers to place</div>
+      <div class="sr">
+        <label>Routers</label>
+        <input type="range" id="sl-rtr" min="1" max="6" value="3" step="1">
+        <span id="v-rtr">3</span>
+      </div>
+      <div class="hint">Left-click any canvas → add router<br>Right-click → remove nearest</div>
+    </div>
+    <div class="cg">
+      <div class="cl">Actions</div>
+      <div class="btn-row">
+        <button class="primary" id="btn-opt">Auto-optimize</button>
+        <button id="btn-clr">Clear routers</button>
+        <button id="btn-rst">Reset agents</button>
+      </div>
+      <div class="hint" style="margin-top:6px">
+        Picks from <b>edge + center candidates</b>, then optimises
+        60 % coverage + 20 % link length + 20 % angular diversity.
+        RTI quality scales rapidly: 3 routers = 3 links, 4 = 6, 5 = 10.
+      </div>
+    </div>
+  </div>
+
+  <footer>1 grid cell ≈ 1 m · RTI: Wilson &amp; Patwari, "Radio Tomographic Imaging with Wireless Networks" (2010) · no dependencies</footer>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+// ── GRID ────────────────────────────────────────────────────────────────────
+const GW=60, GH=30, CS=12;
+const CW=GW*CS, CH=GH*CS;
+
+// ── RF CONSTANTS ────────────────────────────────────────────────────────────
+const TX_DBM    = 14;      // transmit power (dBm)
+const NOISE_DBM = -120;    // floor for "no signal"
+const NLOS_DB   = -8;      // extra loss when 2+ walls are crossed
+const PERSON_DB = 3.5;     // dB absorbed per human body crossing the LOS (empirical Wi-Fi value)
+
+// Per-network: carrier frequency (MHz) and loss per wall crossing (dB)
+const NETWORKS = {
+  "LoRa 868": { freq: 868,  wl: 3.0 },
+  "LoRa 915": { freq: 915,  wl: 3.2 },
+  "WiFi 2.4": { freq: 2400, wl: 8.0 },
+  "WiFi 5":   { freq: 5200, wl: 12.0 },
+};
+
+// ── RTI CONSTANTS ───────────────────────────────────────────────────────────
+// RTI ellipse model (Wilson & Patwari 2010):
+//   weight(p, A→B) = exp( −(dA + dB − |AB|) / λ )
+// A point ON the direct path has dA+dB=|AB|, so excess=0 → weight=1.
+// A point OFF the path has excess>0 → weight decays with λ controlling
+// how wide the "sensitivity tube" is.
+// Same formula is used for:
+//   (a) computing how much each link attenuates due to people nearby
+//   (b) back-projecting that attenuation onto the spatial grid
+// This consistency (one model, two uses) is the key to honest RTI.
+const RTI_LAMBDA   = 1.5;  // sensitivity tube radius (meters)
+const RTI_MIN_DROP = 0.2;  // ignore links with less than this dB change
+const MIN_ROUTERS  = 3;    // 3 routers → 3 links → triangulation possible
+                           // (2 routers = 1 link = only a band, no localization)
+const MESH_THR_DBM = -85;  // minimum inter-router RSSI for a healthy WiFi mesh link
+
+// ── STATE ───────────────────────────────────────────────────────────────────
+let network   = "WiFi 2.4";
+let thrDbm    = -90;
+let nPpl      = 12;
+let nAutoRtr  = 3;
+let routers   = [];
+let rfGrid    = null;    // Float32Array — empty-room RSSI at each cell
+let links     = [];      // [{ax,ay,bx,by,baseRssi}] — empty-room link table
+let rfDirty   = true;
+
+// ── FLOORPLAN ───────────────────────────────────────────────────────────────
+const WALL=0, FREE=1, DOOR=2;
+const occ = new Uint8Array(GW*GH);
+const oi  = (x,y) => y*GW + x;
+
+function hwall(x0,x1,y,d0=-1,d1=-1){
+  for(let x=x0;x<=x1;x++) occ[oi(x,y)] = (x>=d0&&x<=d1) ? DOOR : WALL;
+}
+function vwall(y0,y1,x,d0=-1,d1=-1){
+  for(let y=y0;y<=y1;y++) occ[oi(x,y)] = (y>=d0&&y<=d1) ? DOOR : WALL;
+}
+occ.fill(FREE);
+hwall(0,GW-1,0); hwall(0,GW-1,GH-1); vwall(0,GH-1,0); vwall(0,GH-1,GW-1);
+hwall(0,18,14,8,10); vwall(0,14,18,14,14);   // bedroom 1
+vwall(0,14,28,5,7);  hwall(18,28,14);          // bathroom
+vwall(0,18,50); hwall(28,50,18,38,42);         // living + bed 2
+hwall(0,59,22,12,16);                          // corridor
+vwall(22,GH-1,28,25,27);                       // kitchen
+vwall(22,GH-1,50);                             // office
+
+const LABELS=[
+  ["Bedroom 1",9,7],["Bathroom",23,7],["Living room",39,9],["Bedroom 2",54,9],
+  ["Corridor",25,20],["Kitchen",14,26],["Dining",39,26],["Office",54,26],["Entrance",5,26],
+];
+const freeCells=[];
+for(let y=0;y<GH;y++) for(let x=0;x<GW;x++) if(occ[oi(x,y)]>WALL) freeCells.push([x,y]);
+const randFree = () => freeCells[Math.floor(Math.random()*freeCells.length)];
+
+// ── A* PATHFINDING ──────────────────────────────────────────────────────────
+// Correct A*: nodes enter the closed set when popped (expanded), not when
+// first seen. This guarantees we always process a node with its true optimal
+// g-score rather than the first g-score we happened to find.
+function astar(sx,sy,gx,gy){
+  if(occ[oi(gx,gy)]===WALL) return null;
+  const key=(x,y)=>y*GW+x, h=(x,y)=>Math.hypot(x-gx,y-gy);
+  const DIRS=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+  const open=[[h(sx,sy),0,sx,sy]], came=new Map();
+  const gScore=new Map([[key(sx,sy),0]]);
+  const closed=new Set();
+  let iter=0;
+  while(open.length && iter++<3000){
+    let bi=0;
+    for(let i=1;i<open.length;i++) if(open[i][0]<open[bi][0]) bi=i;
+    const [,g,cx,cy]=open.splice(bi,1)[0];
+    const ck=key(cx,cy);
+    if(closed.has(ck)) continue;
+    closed.add(ck);
+    if(cx===gx&&cy===gy){
+      const path=[[cx,cy]]; let k=ck;
+      while(came.has(k)){const[px,py]=came.get(k);path.push([px,py]);k=key(px,py);}
+      return path.reverse();
+    }
+    for(const[dx,dy]of DIRS){
+      const nx=cx+dx,ny=cy+dy;
+      if(nx<0||ny<0||nx>=GW||ny>=GH||occ[oi(nx,ny)]===WALL) continue;
+      const nk=key(nx,ny); if(closed.has(nk)) continue;
+      const ng=g+(dx&&dy?Math.SQRT2:1);
+      if(ng<(gScore.get(nk)??Infinity)){
+        gScore.set(nk,ng); came.set(nk,[cx,cy]);
+        open.push([ng+h(nx,ny), ng, nx, ny]);
+      }
+    }
+  }
+  return null;
+}
+
+// ── AGENTS ──────────────────────────────────────────────────────────────────
+class Agent{
+  constructor(){ const[x,y]=randFree(); this.x=x+.5; this.y=y+.5; this.path=[]; this.pi=0; this._go(); }
+  _go(){ const[tx,ty]=randFree(); const p=astar(Math.floor(this.x),Math.floor(this.y),tx,ty); this.path=p&&p.length>1?p:[]; this.pi=0; }
+  step(){ if(!this.path.length||this.pi>=this.path.length){this._go();return;} const[nx,ny]=this.path[this.pi++]; this.x=nx+.5; this.y=ny+.5; if(this.pi>=this.path.length) this._go(); }
+}
+let agents=[];
+function spawnAgents(n){ while(agents.length<n) agents.push(new Agent()); agents=agents.slice(0,Math.max(n,0)); }
+spawnAgents(nPpl);
+
+// ── RF MODEL ─────────────────────────────────────────────────────────────────
+// Free-space path loss (log-distance / Friis):
+//   FSPL(dB) = 32.44 + 20·log10(d_km) + 20·log10(f_MHz)
+// Each wall cell crossed adds wallLoss dB. 2+ walls → extra NLOS penalty.
+function fspl(d,f){ return 32.44+20*Math.log10(Math.max(0.5,d)/1000)+20*Math.log10(f); }
+
+// Walk the straight line from (x0,y0)→(x1,y1) and count distinct cells
+// matching the `test` predicate. Uses Math.floor (not round) so each
+// continuous sample lands in its containing grid cell correctly.
+function countCrossings(x0,y0,x1,y1,test){
+  const steps=Math.max(1,Math.ceil(Math.hypot(x1-x0,y1-y0)*2));
+  let hits=0,px=-1,py=-1;
+  for(let i=0;i<=steps;i++){
+    const t=i/steps, cx=Math.floor(x0+(x1-x0)*t), cy=Math.floor(y0+(y1-y0)*t);
+    if(cx<0||cy<0||cx>=GW||cy>=GH) continue;
+    if(test(cx,cy)&&(cx!==px||cy!==py)){hits++;px=cx;py=cy;}
+  }
+  return hits;
+}
+
+// RSSI from router at (txX,txY) to point (rxX,rxY), empty room.
+// All coordinates are continuous (cell-center = integer + 0.5).
+function rssiAt(txX,txY,rxX,rxY){
+  const cfg=NETWORKS[network];
+  const d=Math.hypot(rxX-txX,rxY-txY);
+  const w=countCrossings(txX,txY,rxX,rxY,(cx,cy)=>occ[oi(cx,cy)]===WALL);
+  let r=TX_DBM-fspl(d,cfg.freq)-w*cfg.wl;
+  if(w>=2) r+=NLOS_DB;
+  return r;
+}
+
+// ── RTI ELLIPSE WEIGHT ───────────────────────────────────────────────────────
+// w = exp( −(dA + dB − |AB|) / λ )
+// Points on the LOS path: dA+dB=|AB|, excess=0 → w=1
+// Points off the path: excess>0 → w decays
+// Points at the router endpoints themselves: excluded (dA or dB ≈ 0)
+// because router hardware ≠ person, so endpoints must never score as crowd.
+function ellipseW(px,py,ax,ay,bx,by){
+  const L=Math.hypot(bx-ax,by-ay); if(L<0.5) return 0;
+  const dA=Math.hypot(px-ax,py-ay), dB=Math.hypot(px-bx,py-by);
+  if(dA<0.7||dB<0.7) return 0;  // exclude router endpoint vicinity
+  return Math.exp(-(dA+dB-L)/RTI_LAMBDA);
+}
+
+// ── RECOMPUTE STATIC MAPS ────────────────────────────────────────────────────
+// Called when routers or network change. Builds:
+//   rfGrid  — best-router RSSI at each cell (empty room, no people)
+//   links   — router-to-router link table with baseline RSSI
+function computeRF(){
+  // Coverage heatmap: best signal from any router at each free cell
+  rfGrid = new Float32Array(GW*GH).fill(NOISE_DBM);
+  for(const[rx,ry] of routers){
+    const txX=rx+.5, txY=ry+.5;
+    for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+      if(occ[oi(x,y)]===WALL) continue;
+      const v=rssiAt(txX,txY,x+.5,y+.5);
+      const i=oi(x,y); if(v>rfGrid[i]) rfGrid[i]=v;
+    }
+  }
+  // Router-to-router links with empty-room baseline RSSI
+  links=[];
+  for(let i=0;i<routers.length;i++) for(let j=i+1;j<routers.length;j++){
+    const[ax,ay]=routers[i],[bx,by]=routers[j];
+    const axc=ax+.5,ayc=ay+.5,bxc=bx+.5,byc=by+.5;
+    links.push({ax:axc,ay:ayc,bx:bxc,by:byc, base:rssiAt(axc,ayc,bxc,byc)});
+  }
+  rfDirty=false;
+}
+
+// ── RTI CROWD MAP ────────────────────────────────────────────────────────────
+// This is the honest crowd sensing algorithm.
+// The only inputs it uses:
+//   1. links[] — router positions and their empty-room RSSI baselines
+//   2. A simulated "live" RSSI per link — computed by summing each agent's
+//      ellipse contribution. This stands in for what real RF hardware would
+//      report; the only "cheating" is that we run the simulation forward
+//      (we know where agents are) to fake sensor readings. The ESTIMATION
+//      step that produces the crowd map never touches agent coordinates.
+//
+// Algorithm:
+//   For each link A→B:
+//     drop = baseline_RSSI - live_RSSI (how much signal was lost to people)
+//     for each grid cell (x,y):
+//       numerator[x,y]   += ellipseW(x,y, A, B) * drop
+//       denominator[x,y] += ellipseW(x,y, A, B)
+//   density = numerator / denominator  (normalized per-cell)
+//
+// Normalization is critical: without it, cells near many links (like the
+// router positions themselves) always score highest regardless of people.
+function computeRTI(){
+  const num=new Float32Array(GW*GH), den=new Float32Array(GW*GH);
+  if(links.length===0) return num;
+
+  const nActive=Math.min(agents.length,nPpl);
+
+  for(const link of links){
+    // Simulate measured RSSI: each agent attenuates the link proportional
+    // to their ellipse weight (soft sensing, not binary LOS hit test).
+    let liveRssi=link.base;
+    for(let i=0;i<nActive;i++){
+      liveRssi -= ellipseW(agents[i].x,agents[i].y,link.ax,link.ay,link.bx,link.by) * PERSON_DB;
+    }
+    const drop=link.base-liveRssi;   // positive = signal was absorbed
+    if(drop<RTI_MIN_DROP) continue;  // link too clean to be useful
+
+    // Project drop onto the grid (back-projection step)
+    for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+      if(occ[oi(x,y)]===WALL) continue;
+      const w=ellipseW(x+.5,y+.5,link.ax,link.ay,link.bx,link.by);
+      const i=oi(x,y);
+      num[i]+=w*drop; den[i]+=w;
+    }
+  }
+
+  // Normalize: density at each cell = weighted_drop / total_weight
+  const result=new Float32Array(GW*GH);
+  for(let i=0;i<GW*GH;i++) result[i] = den[i]>0.05 ? num[i]/den[i] : 0;
+  return result;
+}
+
+// ── AUTO ROUTER PLACEMENT ────────────────────────────────────────────────────
+// Step 1: generate candidate points — free cells adjacent to a wall/door/
+//   corner (the structural "edges" of rooms, best mounting spots) plus
+//   open-area centers per tile (for large rooms like the living room).
+// Step 2: greedy max-coverage — place one router at a time at whichever
+//   candidate covers the most still-uncovered floor (measured by RSSI ≥ threshold).
+function findCandidates(){
+  const seen=new Set(), cands=[];
+  const NBRS=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+  const MARGIN=2;
+  for(let y=MARGIN;y<GH-MARGIN;y++) for(let x=MARGIN;x<GW-MARGIN;x++){
+    if(occ[oi(x,y)]===WALL) continue;
+    let wall=false;
+    for(const[dx,dy]of NBRS) if(occ[oi(x+dx,y+dy)]===WALL){wall=true;break;}
+    if(wall){const k=`${x},${y}`; if(!seen.has(k)){seen.add(k);cands.push([x,y]);}}
+  }
+  // Add tile-center candidates for open areas
+  const TW=8,TH=6;
+  for(let ty=0;ty<GH;ty+=TH) for(let tx=0;tx<GW;tx+=TW){
+    let best=null,bestFree=-1;
+    for(let y=ty;y<Math.min(ty+TH,GH);y++) for(let x=tx;x<Math.min(tx+TW,GW);x++){
+      if(occ[oi(x,y)]===WALL) continue;
+      let f=0; for(const[dx,dy]of NBRS){const nx=x+dx,ny=y+dy;if(nx>=0&&ny>=0&&nx<GW&&ny<GH&&occ[oi(nx,ny)]>WALL)f++;}
+      if(f>bestFree){bestFree=f;best=[x,y];}
+    }
+    if(best){const k=`${best[0]},${best[1]}`;if(!seen.has(k)){seen.add(k);cands.push(best);}}
+  }
+  return cands.length ? cands : freeCells.slice();
+}
+
+// ── MULTI-OBJECTIVE ROUTER PLACEMENT ────────────────────────────────────────
+// Score = 0.60 · coverage  +  0.20 · avg_link_length  +  0.20 · angular_diversity
+//
+// coverage        — fraction of floor above thrDbm (the primary goal)
+// avg_link_length — longer links span more of the floor, giving RTI wider
+//                   spatial coverage. Normalised by floorDiag.
+// angular_diversity — for the links formed with all already-placed routers,
+//                   how spread-out are their angles? Computed as the circular
+//                   standard deviation of link bearings (0 = all parallel,
+//                   1 = maximally spread). This penalises three routers on one
+//                   wall (whose links are all nearly parallel and give
+//                   correlated views) in favour of triangulating layouts.
+//
+// All three sub-scores are normalised to [0,1] before combining so the
+// weights are meaningful fractions of the total.
+
+const floorDiag = Math.hypot(GW, GH);   // normalisation constant for link length
+
+// Angular diversity of the links formed between candidate [cx,cy] and all placed
+// routers. Measures how well the links cross each other (links at 90° are ideal;
+// parallel links are redundant). Computed as the mean absolute sine of all
+// pairwise angle differences between link directions — sin(Δθ)=1 at 90°, 0 at 0°/180°.
+// Returns 0 when placed is empty (no penalty on the first router).
+function angularDiversity(placed, cx, cy){
+  if(placed.length < 2) return 0;
+  // Bearing from each placed router to the candidate
+  const angles = placed.map(([px,py]) => Math.atan2(cy-py, cx-px));
+  let sum=0, pairs=0;
+  for(let i=0;i<angles.length;i++) for(let j=i+1;j<angles.length;j++){
+    sum += Math.abs(Math.sin(angles[i]-angles[j]));
+    pairs++;
+  }
+  return pairs > 0 ? sum/pairs : 0;   // 0 = all parallel, 1 = all at 90°
+}
+
+function optimize(n){
+  const MIN_D=5;
+  const W_COV=0.60, W_LEN=0.20, W_ANG=0.20;
+  const cands=findCandidates();
+  const placed=[];
+  let bestGrid=new Float32Array(GW*GH).fill(NOISE_DBM);
+  let totalFree=freeCells.length;
+
+  for(let r=0;r<n;r++){
+    let bestCand=null, bestScore=-Infinity, bestMerged=null;
+
+    for(const[cx,cy]of cands){
+      if(placed.some(([px,py])=>Math.hypot(cx-px,cy-py)<MIN_D)) continue;
+
+      // --- coverage sub-score ---
+      const txX=cx+.5,txY=cy+.5;
+      const trial=new Float32Array(GW*GH).fill(NOISE_DBM);
+      for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+        if(occ[oi(x,y)]===WALL) continue;
+        trial[oi(x,y)]=rssiAt(txX,txY,x+.5,y+.5);
+      }
+      let cov=0;
+      for(let i=0;i<GW*GH;i++) if(Math.max(bestGrid[i],trial[i])>=thrDbm) cov++;
+      const sCov=totalFree>0 ? cov/totalFree : 0;
+
+      // --- avg link-length sub-score ---
+      // Average distance from this candidate to all already-placed routers,
+      // normalised by the floor diagonal so it's always in [0,1].
+      let avgLen=0;
+      if(placed.length>0){
+        avgLen=placed.reduce((s,[px,py])=>s+Math.hypot(cx-px,cy-py),0)/placed.length;
+        avgLen=Math.min(1, avgLen/floorDiag);
+      }
+
+      // --- angular diversity sub-score ---
+      const sAng=angularDiversity(placed,cx,cy);
+
+      const score = W_COV*sCov + W_LEN*avgLen + W_ANG*sAng;
+
+      if(score>bestScore){
+        bestScore=score; bestCand=[cx,cy];
+        bestMerged=new Float32Array(GW*GH);
+        for(let i=0;i<GW*GH;i++) bestMerged[i]=Math.max(bestGrid[i],trial[i]);
+      }
+    }
+    if(!bestCand) break;
+    placed.push(bestCand); bestGrid=bestMerged;
+  }
+  routers=placed; rfDirty=true;
+}
+
+// ── RENDERING ────────────────────────────────────────────────────────────────
+const CVS={floor:document.getElementById('c-floor'),rf:document.getElementById('c-rf'),rti:document.getElementById('c-rti')};
+const CTX={};
+for(const k in CVS){CVS[k].width=CW;CVS[k].height=CH;CTX[k]=CVS[k].getContext('2d');}
+
+// Pre-render static wall layer
+const wc=document.createElement('canvas'); wc.width=CW; wc.height=CH;
+const wx=wc.getContext('2d');
+for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+  const v=occ[oi(x,y)];
+  wx.fillStyle=v===WALL?'#1a1f26':v===DOOR?'#1d6b4d':'#0f1216';
+  wx.fillRect(x*CS,y*CS,CS,CS);
+}
+wx.font='bold 9px monospace'; wx.textAlign='center'; wx.textBaseline='middle';
+for(const[lbl,lx,ly]of LABELS){wx.fillStyle='rgba(170,177,188,0.55)';wx.fillText(lbl,lx*CS,ly*CS);}
+
+// RSSI → colour (blue→cyan→green→yellow→red)
+function rssiColor(v){
+  const t=Math.max(0,Math.min(1,(v-NOISE_DBM)/(-50-NOISE_DBM)));
+  let r,g,b;
+  if(t<.25){const q=t/.25;r=0;g=Math.round(q*255);b=255;}
+  else if(t<.5){const q=(t-.25)/.25;r=0;g=255;b=Math.round((1-q)*255);}
+  else if(t<.75){const q=(t-.5)/.25;r=Math.round(q*255);g=255;b=0;}
+  else{const q=(t-.75)/.25;r=255;g=Math.round((1-q)*255);b=0;}
+  return `rgba(${r},${g},${b},0.78)`;
+}
+
+// RTI density (normalized 0-1) → colour
+function rtiColor(t){
+  if(t<.5){const q=t*2;return `rgba(${Math.round(q*255)},200,0,${0.25+t*.5})`;}
+  const q=(t-.5)*2;
+  return `rgba(255,${Math.round((1-q)*200)},0,${0.5+q*.35})`;
+}
+
+function drawRouters(ctx){
+  for(const[rx,ry]of routers){
+    const px=rx*CS,py=ry*CS;
+    ctx.beginPath();ctx.moveTo(px,py-7);ctx.lineTo(px+6,py+5);ctx.lineTo(px-6,py+5);ctx.closePath();
+    ctx.fillStyle='#ff5fd1';ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.85)';ctx.lineWidth=1.5;ctx.stroke();
+  }
+}
+
+function drawLinkLines(ctx){
+  ctx.save();
+  ctx.strokeStyle='rgba(255,95,209,0.2)';ctx.lineWidth=1;ctx.setLineDash([3,4]);
+  for(let i=0;i<routers.length;i++) for(let j=i+1;j<routers.length;j++){
+    ctx.beginPath();
+    ctx.moveTo(routers[i][0]*CS,routers[i][1]*CS);
+    ctx.lineTo(routers[j][0]*CS,routers[j][1]*CS);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFloor(){
+  const ctx=CTX.floor; ctx.drawImage(wc,0,0);
+  const n=Math.min(agents.length,nPpl);
+  for(let i=0;i<n;i++){
+    ctx.beginPath();ctx.arc(agents[i].x*CS,agents[i].y*CS,4,0,Math.PI*2);
+    ctx.fillStyle='#3dd6ff';ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.85)';ctx.lineWidth=1;ctx.stroke();
+  }
+  drawRouters(ctx);
+}
+
+function drawRF(){
+  const ctx=CTX.rf; ctx.drawImage(wc,0,0);
+  if(rfGrid) for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    if(occ[oi(x,y)]===WALL)continue;
+    ctx.fillStyle=rssiColor(rfGrid[oi(x,y)]); ctx.fillRect(x*CS,y*CS,CS,CS);
+  }
+  ctx.fillStyle='rgba(232,234,237,0.55)';
+  ctx.font='10px monospace';ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(`Threshold: ${thrDbm} dBm`,4,4);
+  drawRouters(ctx);
+}
+
+function drawRTI(){
+  const ctx=CTX.rti; ctx.drawImage(wc,0,0);
+  if(routers.length<MIN_ROUTERS){
+    ctx.fillStyle='rgba(232,234,237,0.4)';
+    ctx.font='11px monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(`Needs ${MIN_ROUTERS}+ routers for triangulation`,CW/2,CH/2-8);
+    ctx.fillText(`(${MIN_ROUTERS} routers = ${MIN_ROUTERS*(MIN_ROUTERS-1)/2} crossing links)`,CW/2,CH/2+10);
+    drawRouters(ctx);return;
+  }
+  drawLinkLines(ctx);
+  const rti=computeRTI();
+  let peak=0; for(let i=0;i<GW*GH;i++) if(rti[i]>peak) peak=rti[i];
+  if(peak>0.05) for(let y=0;y<GH;y++) for(let x=0;x<GW;x++){
+    if(occ[oi(x,y)]===WALL)continue;
+    const t=rti[oi(x,y)]/peak;
+    if(t>0.04){ctx.fillStyle=rtiColor(t);ctx.fillRect(x*CS,y*CS,CS,CS);}
+  }
+
+  // Mesh connectivity: flag WiFi links too weak for reliable backhaul
+  const isWifi = network.startsWith('WiFi');
+  let weakLinks=0;
+  if(isWifi && links.length){
+    ctx.save();
+    ctx.strokeStyle='rgba(255,80,80,0.7)'; ctx.lineWidth=1.5; ctx.setLineDash([2,3]);
+    for(const lk of links){
+      if(lk.base < MESH_THR_DBM){
+        weakLinks++;
+        ctx.beginPath();
+        ctx.moveTo((lk.ax-.5)*CS, (lk.ay-.5)*CS);
+        ctx.lineTo((lk.bx-.5)*CS, (lk.by-.5)*CS);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  const nL=links.length;
+  ctx.fillStyle='rgba(232,234,237,0.55)';
+  ctx.font='10px monospace';ctx.textAlign='left';ctx.textBaseline='top';
+  ctx.fillText(`${routers.length} routers · ${nL} link${nL!==1?'s':''}${weakLinks?` · ⚠ ${weakLinks} weak`:''}`,4,4);
+  drawRouters(ctx);
+}
+
+function updateStats(){
+  if(!rfGrid)return;
+
+  // ── Coverage ───────────────────────────────────────────────────────────────
+  let cov=0,total=0,rSum=0,rN=0;
+  for(let i=0;i<GW*GH;i++){
+    if(occ[i]===WALL)continue; total++;
+    if(rfGrid[i]>=thrDbm) cov++;
+    if(rfGrid[i]>NOISE_DBM){rSum+=rfGrid[i];rN++;}
+  }
+  const cp=total?(cov/total*100):0, ar=rN?(rSum/rN):NOISE_DBM;
+  document.getElementById('s-cov').textContent=cp.toFixed(1)+'%';
+  document.getElementById('s-dead').textContent=(100-cp).toFixed(1)+'%';
+  document.getElementById('s-rssi').textContent=ar.toFixed(0)+' dBm';
+  document.getElementById('s-ppl').textContent=nPpl;
+
+  // ── Placement rationale ────────────────────────────────────────────────────
+  const nL=routers.length*(routers.length-1)/2;
+
+  // avg link length (normalised 0-1 by floor diagonal)
+  let avgLen=0;
+  if(routers.length>=2){
+    let pairs=0;
+    for(let i=0;i<routers.length;i++) for(let j=i+1;j<routers.length;j++){
+      avgLen+=Math.hypot(routers[j][0]-routers[i][0],routers[j][1]-routers[i][1]);
+      pairs++;
+    }
+    avgLen=Math.min(1,(avgLen/pairs)/floorDiag);
+  }
+
+  // angular diversity: mean |sin(Δθ)| across all link-pair combinations
+  let angDiv=0;
+  if(routers.length>=3){
+    let sum=0,pairs=0;
+    // treat each router as a "candidate" and measure diversity w.r.t. all others
+    for(let k=0;k<routers.length;k++){
+      const others=routers.filter((_,i)=>i!==k);
+      const angles=others.map(([px,py])=>Math.atan2(routers[k][1]-py,routers[k][0]-px));
+      for(let i=0;i<angles.length;i++) for(let j=i+1;j<angles.length;j++){
+        sum+=Math.abs(Math.sin(angles[i]-angles[j])); pairs++;
+      }
+    }
+    angDiv=pairs>0?sum/pairs:0;
+  }
+
+  // composite score (same weights as optimizer: 60/20/20)
+  const sCov=cp/100, sLen=avgLen, sAng=angDiv;
+  const composite=0.60*sCov+0.20*sLen+0.20*sAng;
+
+  // update DOM
+  document.getElementById('r-cov').textContent=cp.toFixed(1)+'%';
+  document.getElementById('r-len').textContent=avgLen.toFixed(2);
+  document.getElementById('r-ang').textContent=angDiv.toFixed(2);
+  document.getElementById('r-lnk').textContent=nL;
+  document.getElementById('score-bar').style.width=(composite*100).toFixed(1)+'%';
+  document.getElementById('score-val').textContent=(composite*100).toFixed(0);
+  // per-component breakdown bar (flex proportional to weighted contribution)
+  document.getElementById('bar-cov').style.flex=String(0.60*sCov);
+  document.getElementById('bar-len').style.flex=String(0.20*sLen);
+  document.getElementById('bar-ang').style.flex=String(0.20*sAng);
+
+  const badge=`${network} · ${routers.length} router${routers.length!==1?'s':''} · ${nL} RTI link${nL!==1?'s':''} · score ${(composite*100).toFixed(0)}`;
+  document.getElementById('badge').textContent=badge;
+}
+
+// ── ANIMATION LOOP ───────────────────────────────────────────────────────────
+// RF coverage (rfGrid + links baseline) only recomputes when rfDirty — i.e.
+// when routers or network actually changed. This is expensive; no reason to
+// run every frame. RTI (crowd map) recomputes every tick since agents move.
+let lastTs=0, tick=0;
+function loop(ts){
+  if(ts-lastTs>80){
+    lastTs=ts; tick++;
+    const n=Math.min(agents.length,nPpl);
+    for(let i=0;i<n;i++) agents[i].step();
+    if(rfDirty) computeRF();
+    drawFloor(); drawRF(); drawRTI();
+    if(tick%5===0) updateStats();
+  }
+  requestAnimationFrame(loop);
+}
+optimize(nAutoRtr);
+requestAnimationFrame(loop);
+
+// ── UI WIRING ────────────────────────────────────────────────────────────────
+const radioDiv=document.getElementById('net-radio');
+Object.keys(NETWORKS).forEach(n=>{
+  const btn=document.createElement('div');
+  btn.className='rb'+(n===network?' active':'');
+  btn.textContent=n;
+  btn.onclick=()=>{
+    document.querySelectorAll('.rb').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    network=n; rfDirty=true;
+  };
+  radioDiv.appendChild(btn);
+});
+
+const slThr=document.getElementById('sl-thr'),vThr=document.getElementById('v-thr');
+slThr.addEventListener('input',()=>{thrDbm=+slThr.value;vThr.textContent=slThr.value;updateStats();});
+
+const slPpl=document.getElementById('sl-ppl'),vPpl=document.getElementById('v-ppl');
+slPpl.addEventListener('input',()=>{nPpl=+slPpl.value;vPpl.textContent=slPpl.value;spawnAgents(nPpl);});
+
+const slRtr=document.getElementById('sl-rtr'),vRtr=document.getElementById('v-rtr');
+slRtr.addEventListener('input',()=>{nAutoRtr=+slRtr.value;vRtr.textContent=slRtr.value;});
+
+document.getElementById('btn-opt').onclick=()=>optimize(nAutoRtr);
+document.getElementById('btn-clr').onclick=()=>{routers=[];rfDirty=true;};
+document.getElementById('btn-rst').onclick=()=>{agents=[];spawnAgents(nPpl);};
+
+function canvasClick(e,canvas){
+  e.preventDefault();
+  const rect=canvas.getBoundingClientRect();
+  const gx=Math.floor((e.clientX-rect.left)*(CW/rect.width)/CS);
+  const gy=Math.floor((e.clientY-rect.top)*(CH/rect.height)/CS);
+  if(gx<0||gy<0||gx>=GW||gy>=GH||occ[oi(gx,gy)]===WALL) return;
+  if(e.button===2){
+    if(!routers.length)return;
+    let bi=0,bd=Infinity;
+    routers.forEach(([rx,ry],i)=>{const d=Math.hypot(rx-gx,ry-gy);if(d<bd){bd=d;bi=i;}});
+    routers.splice(bi,1);
+  } else {
+    routers.push([gx,gy]);
+  }
+  rfDirty=true;
+}
+[CVS.floor,CVS.rf,CVS.rti].forEach(c=>{
+  c.addEventListener('mousedown',e=>canvasClick(e,c));
+  c.addEventListener('contextmenu',e=>e.preventDefault());
+});
+
+})();
+</script>
+</body>
+</html>
